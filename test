@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>고도에 따른 대기 변화</title>
+    <!-- Tailwind CSS 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js 로드 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts (Inter) 로드 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* 기본 폰트 및 슬라이더 스타일링 */
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+        }
+        /* 커스텀 슬라이더 스타일 */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #d1d5db; /* gray-300 */
+            border-radius: 9999px;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+        input[type="range"]:hover {
+            opacity: 1;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            background: #3b82f6; /* blue-500 */
+            cursor: pointer;
+            border-radius: 50%;
+            border: 4px solid white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 4px solid white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-6xl bg-white rounded-2xl shadow-lg p-6 md:p-8">
+        <div class="text-center mb-6">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-800">고도에 따른 대기 변화</h1>
+            <p class="text-gray-500 mt-2">슬라이더를 조절하거나 값을 직접 입력하여 변화를 확인해보세요.</p>
+        </div>
+
+        <!-- 컨트롤 섹션 -->
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <!-- 고도 입력 그룹 -->
+                <div class="flex flex-wrap items-center gap-x-6 gap-y-4">
+                    <!-- 킬로미터 입력 -->
+                    <div class="flex items-center gap-2">
+                        <label for="altitudeInput" class="font-semibold text-gray-700 whitespace-nowrap">altitude [km]:</label>
+                        <input type="number" id="altitudeInput" min="0" max="20" step="0.1" value="10.0" class="w-24 p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                        <button id="updateButton" class="px-4 py-2 bg-blue-500 text-white font-semibold rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">input</button>
+                    </div>
+                    <!-- 피트 입력 -->
+                    <div class="flex items-center gap-2">
+                        <label for="feetInput" class="font-semibold text-gray-700 whitespace-nowrap">altitude [ft]:</label>
+                        <input type="number" id="feetInput" step="100" placeholder="e.g., 35000" class="w-28 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+                        <button id="convertButton" class="px-4 py-2 bg-blue-500 text-white font-semibold rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">input</button>
+                    </div>
+                </div>
+                 <!-- 현재 고도 표시 -->
+                <div class="text-lg font-semibold text-gray-700 text-left sm:text-right">
+                    현재 고도: <span id="altitudeValue" class="text-blue-600 font-bold">10.0</span> km
+                </div>
+            </div>
+            <!-- 고도 슬라이더 -->
+            <div class="mt-4">
+                 <input type="range" id="altitudeSlider" min="0" max="20000" step="100" value="10000" class="w-full">
+            </div>
+        </div>
+
+        <!-- 메인 콘텐츠 영역 (그래프 + 데이터) -->
+        <div class="flex flex-col md:flex-row gap-6">
+            <!-- 그래프 섹션 (왼쪽) -->
+            <div class="md:w-3/5 lg:w-2/3 h-[42rem]">
+                <canvas id="atmosphereChart"></canvas>
+            </div>
+
+            <!-- 데이터 표시 섹션 (오른쪽) -->
+            <div class="md:w-2/5 lg:w-1/3 flex flex-col gap-4 text-center">
+                <div class="bg-red-100 p-4 rounded-lg flex-1 flex flex-col justify-center">
+                    <h2 class="text-lg font-semibold text-red-800">온도 (Temperature)</h2>
+                    <p id="temperatureValue" class="text-3xl font-bold text-red-600">-50.5 °C</p>
+                </div>
+                <div class="bg-blue-100 p-4 rounded-lg flex-1 flex flex-col justify-center">
+                    <h2 class="text-lg font-semibold text-blue-800">밀도 (Density)</h2>
+                    <p id="densityValue" class="text-3xl font-bold text-blue-600">0.414 kg/m³</p>
+                </div>
+                 <div class="bg-green-100 p-4 rounded-lg flex-1 flex flex-col justify-center">
+                    <h2 class="text-lg font-semibold text-green-800">압력 (Pressure)</h2>
+                    <p id="pressureValue" class="text-3xl font-bold text-green-600">265.0 hPa</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM 요소 가져오기 ---
+        const altitudeSlider = document.getElementById('altitudeSlider');
+        const altitudeInput = document.getElementById('altitudeInput');
+        const updateButton = document.getElementById('updateButton');
+        const feetInput = document.getElementById('feetInput');
+        const convertButton = document.getElementById('convertButton');
+        const altitudeValue = document.getElementById('altitudeValue');
+        const temperatureValue = document.getElementById('temperatureValue');
+        const densityValue = document.getElementById('densityValue');
+        const pressureValue = document.getElementById('pressureValue');
+        const ctx = document.getElementById('atmosphereChart').getContext('2d');
+
+        // --- 물리 상수 정의 (국제 표준 대기 모델 기반) ---
+        const SPECIFIC_GAS_CONSTANT = 287.058;
+        const STANDARD_GRAVITY = 9.80665;
+        const SEA_LEVEL_TEMP_K = 288.15;
+        const SEA_LEVEL_PRESSURE_PA = 101325;
+        
+        // --- 대기 상태 계산 함수 ---
+        function calculateAtmosphere(altitude) {
+            let temperatureK, pressure, density;
+
+            if (altitude <= 11000) {
+                const L = -0.0065;
+                temperatureK = SEA_LEVEL_TEMP_K + L * altitude;
+                pressure = SEA_LEVEL_PRESSURE_PA * Math.pow(1 + (L * altitude) / SEA_LEVEL_TEMP_K, -STANDARD_GRAVITY / (SPECIFIC_GAS_CONSTANT * L));
+            } 
+            else if (altitude <= 20000) {
+                const T11 = 216.65;
+                const P11 = 22632.1;
+                temperatureK = T11;
+                pressure = P11 * Math.exp(-STANDARD_GRAVITY * (altitude - 11000) / (SPECIFIC_GAS_CONSTANT * T11));
+            }
+            else { // 20km 이상은 20km 데이터로 근사
+                const T20 = 216.65;
+                const P20 = 5474.89;
+                temperatureK = T20;
+                pressure = P20 * Math.exp(-STANDARD_GRAVITY * (altitude - 20000) / (SPECIFIC_GAS_CONSTANT * T20));
+            }
+            
+            density = pressure / (SPECIFIC_GAS_CONSTANT * temperatureK);
+            const temperatureC = temperatureK - 273.15;
+
+            return { temperature: temperatureC, density: density, pressure: pressure };
+        }
+
+        // --- 차트 데이터 생성 ---
+        const temperatureData = [];
+        const densityData = [];
+        const pressureData = [];
+        for (let h = 0; h <= 20000; h += 500) {
+            const altitudeKm = h / 1000;
+            const atm = calculateAtmosphere(h);
+            temperatureData.push({ x: atm.temperature, y: altitudeKm });
+            densityData.push({ x: atm.density, y: altitudeKm });
+            pressureData.push({ x: atm.pressure / 100, y: altitudeKm }); // Pa -> hPa
+        }
+
+        // --- 차트 플러그인: 현재 고도에 수평선 및 교점 그리기 ---
+        const horizontalLinePlugin = {
+            id: 'horizontalLine',
+            afterDraw: (chart) => {
+                if (chart.tooltip?.active?.length) return;
+                const ctx = chart.ctx;
+                const currentAltitudeM = chart.options.plugins.horizontalLine.y;
+                const currentAltitudeKm = currentAltitudeM / 1000;
+
+                const yPixel = chart.scales.y.getPixelForValue(currentAltitudeKm);
+                const leftX = chart.chartArea.left;
+                const rightX = chart.chartArea.right;
+
+                if (yPixel >= chart.scales.y.top && yPixel <= chart.scales.y.bottom) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(leftX, yPixel);
+                    ctx.lineTo(rightX, yPixel);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = 'rgba(59, 130, 246, 0.7)';
+                    ctx.stroke();
+                    ctx.restore();
+
+                    const findInterpolatedX = (data, yValue) => {
+                        for (let i = 0; i < data.length - 1; i++) {
+                            const p1 = data[i]; const p2 = data[i + 1];
+                            if ((p1.y <= yValue && p2.y >= yValue) || (p1.y >= yValue && p2.y <= yValue)) {
+                                if (p2.y - p1.y === 0) return p1.x;
+                                return p1.x + (p2.x - p1.x) * (yValue - p1.y) / (p2.y - p1.y);
+                            }
+                        }
+                        return null;
+                    };
+                    
+                    const datasets = chart.data.datasets;
+                    const colors = ['rgb(239, 68, 68)', 'rgb(59, 130, 246)', 'rgb(34, 197, 94)'];
+                    const scales = ['x-temp', 'x-density', 'x-pressure'];
+
+                    datasets.forEach((dataset, index) => {
+                        const interpolatedX = findInterpolatedX(dataset.data, currentAltitudeKm);
+                        if (interpolatedX !== null) {
+                            const xPixel = chart.scales[scales[index]].getPixelForValue(interpolatedX);
+                            if (xPixel >= leftX && xPixel <= rightX) {
+                                ctx.save();
+                                ctx.beginPath();
+                                ctx.arc(xPixel, yPixel, 6, 0, 2 * Math.PI, false);
+                                ctx.fillStyle = colors[index];
+                                ctx.fill();
+                                ctx.lineWidth = 2;
+                                ctx.strokeStyle = 'white';
+                                ctx.stroke();
+                                ctx.restore();
+                            }
+                        }
+                    });
+                }
+            }
+        };
+
+        // --- Chart.js 인스턴스 생성 ---
+        const atmosphereChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    { label: '온도 (°C)', data: temperatureData, borderColor: 'rgb(239, 68, 68)', backgroundColor: 'rgba(239, 68, 68, 0.1)', xAxisID: 'x-temp', tension: 0.1, pointRadius: 0 },
+                    { label: '밀도 (kg/m³)', data: densityData, borderColor: 'rgb(59, 130, 246)', backgroundColor: 'rgba(59, 130, 246, 0.1)', xAxisID: 'x-density', tension: 0.1, pointRadius: 0 },
+                    { label: '압력 (hPa)', data: pressureData, borderColor: 'rgb(34, 197, 94)', backgroundColor: 'rgba(34, 197, 94, 0.1)', xAxisID: 'x-pressure', tension: 0.1, pointRadius: 0 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    y: { title: { display: true, text: '고도 (km)' } },
+                    'x-temp': { type: 'linear', position: 'bottom', title: { display: true, text: '온도 (°C)', color: 'rgb(239, 68, 68)' }, ticks: { color: 'rgb(239, 68, 68)' } },
+                    'x-density': { type: 'linear', position: 'top', title: { display: true, text: '밀도 (kg/m³)', color: 'rgb(59, 130, 246)' }, ticks: { color: 'rgb(59, 130, 246)' }, grid: { drawOnChartArea: false } },
+                    'x-pressure': { type: 'linear', position: 'bottom', title: { display: true, text: '압력 (hPa)', color: 'rgb(34, 197, 94)' }, ticks: { color: 'rgb(34, 197, 94)' }, grid: { drawOnChartArea: false }, offset: true }
+                },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `${context.dataset.label || ''}: ${context.parsed.x.toFixed(3)}`,
+                            title: (tooltipItems) => `고도: ${tooltipItems[0].parsed.y.toFixed(2)} km`
+                        }
+                    },
+                    horizontalLine: { y: 10000 }
+                }
+            },
+            plugins: [horizontalLinePlugin]
+        });
+
+        // --- UI 업데이트 함수 ---
+        function updateUI(altitudeInMeters) {
+            const clampedAltitude = Math.max(0, Math.min(20000, altitudeInMeters));
+            const atmData = calculateAtmosphere(clampedAltitude);
+            const altitudeInKm = (clampedAltitude / 1000).toFixed(1);
+            const altitudeInFeet = (clampedAltitude * 3.28084).toFixed(0);
+
+            altitudeValue.textContent = altitudeInKm;
+            altitudeInput.value = altitudeInKm;
+            feetInput.value = altitudeInFeet;
+            altitudeSlider.value = clampedAltitude;
+            
+            temperatureValue.textContent = `${atmData.temperature.toFixed(1)} °C`;
+            densityValue.textContent = `${atmData.density.toFixed(3)} kg/m³`;
+            pressureValue.textContent = `${(atmData.pressure / 100).toFixed(1)} hPa`;
+            
+            atmosphereChart.options.plugins.horizontalLine.y = clampedAltitude;
+            atmosphereChart.update();
+        }
+
+        // --- 이벤트 리스너 ---
+        altitudeSlider.addEventListener('input', (event) => updateUI(parseInt(event.target.value)));
+        
+        updateButton.addEventListener('click', () => updateUI(parseFloat(altitudeInput.value) * 1000));
+        
+        altitudeInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') updateButton.click(); });
+
+        convertButton.addEventListener('click', () => {
+            const feet = parseFloat(feetInput.value);
+            if (!isNaN(feet)) {
+                const meters = feet / 3.28084;
+                updateUI(meters);
+            }
+        });
+
+        feetInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                convertButton.click();
+            }
+        });
+
+        // --- 초기 UI 상태 설정 ---
+        updateUI(10000);
+    </script>
+</body>
+</html>
+
